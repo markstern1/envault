@@ -76,3 +76,40 @@ def decrypt_file(input_path: Path, output_path: Path, identity_path: Optional[Pa
 
     if result.returncode != 0:
         raise CryptoError(f"Decryption failed: {result.stderr.strip()}")
+
+
+def get_public_key(identity_path: Optional[Path] = None) -> str:
+    """Derive the public key from an age identity file.
+
+    Args:
+        identity_path: Path to the age identity (private key) file.
+                       Defaults to ~/.age/key.txt if not provided.
+
+    Returns:
+        The age public key string corresponding to the given identity.
+
+    Raises:
+        CryptoError: If the identity file is not found, the age-keygen binary
+                     is not available, or key derivation fails.
+    """
+    if identity_path is None:
+        identity_path = Path.home() / ".age" / "key.txt"
+
+    if not identity_path.exists():
+        raise CryptoError(f"Identity file not found: {identity_path}")
+
+    try:
+        result = subprocess.run(
+            ["age-keygen", "--yes", "-y", str(identity_path)],
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        raise CryptoError(
+            "'age-keygen' binary not found. Install it from https://github.com/FiloSottile/age"
+        )
+
+    if result.returncode != 0:
+        raise CryptoError(f"Failed to derive public key: {result.stderr.strip()}")
+
+    return result.stdout.strip()
