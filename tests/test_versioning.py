@@ -47,6 +47,19 @@ def test_record_version_stores_recipient(tmp_path):
     assert versions[0]["recipient"] == RECIPIENT
 
 
+def test_record_version_checksum_changes_with_content(tmp_path):
+    """Verify that different file contents produce different checksums."""
+    enc = tmp_path / ".env.age"
+
+    enc.write_bytes(b"content_v1")
+    checksum_v1 = record_version(enc, RECIPIENT)
+
+    enc.write_bytes(b"content_v2")
+    checksum_v2 = record_version(enc, RECIPIENT)
+
+    assert checksum_v1 != checksum_v2
+
+
 def test_list_versions_returns_only_matching_file(tmp_path):
     enc1 = tmp_path / ".env.age"
     enc1.write_bytes(b"env1")
