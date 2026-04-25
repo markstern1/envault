@@ -1,13 +1,45 @@
+# Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.mypy_cache/
-*~
+*.pyo
+*.pyd
 *.egg
-htmlcov/
-.coverage
+*.egg-info/
 dist/
-.eggs/
 build/
-*.log
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+
+# envault secrets — never commit these!
+*.age
+.env
+.env.*
+!.env.example
+
+# envault team file — commit this to share recipients with your team
+# (contains only PUBLIC keys, no secrets)
+# .envault-team.json
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
