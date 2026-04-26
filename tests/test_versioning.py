@@ -60,6 +60,17 @@ def test_record_version_checksum_changes_with_content(tmp_path):
     assert checksum_v1 != checksum_v2
 
 
+def test_record_version_same_content_produces_same_checksum(tmp_path):
+    """Verify that identical file contents produce the same checksum across versions."""
+    enc = tmp_path / ".env.age"
+    enc.write_bytes(b"identical_content")
+
+    checksum_v1 = record_version(enc, RECIPIENT)
+    checksum_v2 = record_version(enc, RECIPIENT)
+
+    assert checksum_v1 == checksum_v2
+
+
 def test_list_versions_returns_only_matching_file(tmp_path):
     enc1 = tmp_path / ".env.age"
     enc1.write_bytes(b"env1")
