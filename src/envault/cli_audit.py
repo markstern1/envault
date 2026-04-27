@@ -1,121 +1,71 @@
-"""CLI commands for viewing and querying the audit log."""
-
+import json
 import click
-from pathlib import Path
-from datetime import datetime
-
-from .audit import get_events
+from envault.audit import get_events, record_event, _load_audit, _save_audit
 
 
-@click.group(name="audit")
-def audit_group() -> None:
-    """View and query the audit log for envault operations."""
+@click.group("audit")
+def audit_group():
+    """View and manage the audit log."""
+    pass
 
 
-@audit_group.command(name="log")
-@click.option(
-    "--dir",
-    "vault_dir",
-    default=".",
-    show_default=True,
-    help="Directory containing the .envault/ folder.",
-)
-@click.option(
-    "--limit",
-    default=20,
-    show_default=True,
-    help="Maximum number of entries to display.",
-)
-@click.option(
-    "--actor",
-    default=None,
-    help="Filter entries by actor name or key fingerprint.",
-)
-@click.option(
-    "--action",
-    default=None,
-    help="Filter entries by action type (e.g. encrypt, decrypt, rotate).",
-)
-@click.option(
-    "--json", "as_json",
-    is_flag=True,
-    default=False,
-    help="Output entries as JSON lines.",
-)
-def audit_log(
-    vault_dir: str,
-    limit: int,
-    actor: str | None,
-    action: str | None,
-    as_json: bool,
-) -> None:
-    """Display recent audit log entries."""
-    import json as _json
+@audit_group.command("log")
+@click.option("--env", default=".env", show_default=True, help="Base name of the env file.")
+@click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text", show_default=True)
+@click.option("--actor", default=None, help="Filter entries by actor.")
+@click.option("--action", default=None, help="Filter entries by action.")
+@click.option("--limit", default=0, type=int, help="Limit number of entries shown (0 = all).")
+def audit_log(env, fmt, actor, action, limit):
+    """Display the audit log for an env file."""
+    events = get_events(env)
 
-    vault_path = Path(vault_dir)
-    events = get_events(vault_path)
-
-    if not events:
-        click.echo("No audit events recorded yet.")
-        return
-
-    # Apply optional filters
     if actor:
-        events = [e for e in events if actor.lower() in (e.get("actor") or "").lower()]
+        events = [e for e in events if e.get("actor") == actor]
     if action:
-        events = [e for e in events if action.lower() in (e.get("action") or "").lower()]
-
-    # Most recent first, then cap
-    events = list(reversed(events))[:limit]
+        events = [e for e in events if e.get("action") == action]
+    if limit and limit > 0:
+        events = events[-limit:]
 
     if not events:
-        click.echo("No matching audit events found.")
+        click.echo("No audit events found.")
         return
 
-    for entry in events:
-        if as_json:
-            click.echo(_json.dumps(entry))
-        else:
+    if fmt == "json":
+        click.echo(json.dumps(events, indent=2))
+    else:
+        for entry in events:
             _print_entry(entry)
 
 
 def _print_entry(entry: dict) -> None:
-    """Pretty-print a single audit log entry to stdout."""
-    ts_raw = entry.get("timestamp", "")
-    try:
-        dt = datetime.fromisoformat(ts_raw)
-        ts = dt.strftime("%Y-%m-%d %H:%M:%S")
-    except (ValueError, TypeError):
-        ts = ts_raw or "unknown time"
-
+    ts = entry.get("timestamp", "unknown")
     action = entry.get("action", "unknown")
     actor = entry.get("actor") or "<unknown>"
     detail = entry.get("detail") or ""
-
-    line = click.style(f"[{ts}]", fg="cyan") + " " + click.style(action, fg="yellow", bold=True)
-    line += f"  actor={actor}"
+    line = f"[{ts}] {action} by {actor}"
     if detail:
-        line += f"  {detail}"
+        line += f" — {detail}"
     click.echo(line)
 
 
-@audit_group.command(name="clear")
-@click.option(
-    "--dir",
-    "vault_dir",
-    default=".",
-    show_default=True,
-    help="Directory containing the .envault/ folder.",
-)
-@click.confirmation_option(prompt="This will permanently delete all audit log entries. Continue?")
-def audit_clear(vault_dir: str) -> None:
-    """Permanently clear all audit log entries."""
-    vault_path = Path(vault_dir) / ".envault"
-    audit_file = vault_path / "audit.json"
+@audit_group.command("clear")
+@click.option("--env", default=".env", show_default=True, help="Base name of the env file.")
+@click.confirmation_option(prompt="Are you sure you want to clear the audit log?")
+def audit_clear(env):
+    """Clear all audit log entries for an env file."""
+    audit_data = _load_audit(env)
+    count = len(audit_data.get("events", []))
+    audit_data["events"] = []
+    _save_audit(env, audit_data)
+    click.echo(f"Cleared {count} audit event(s) for '{env}'.")
 
-    if not audit_file.exists():
-        click.echo("No audit log found — nothing to clear.")
-        return
 
-    audit_file.write_text("[]")
-    click.echo(click.style("Audit log cleared.", fg="green"))
+@audit_group.command("export")
+@click.option("--env", default=".env", show_default=True, help="Base name of the env file.")
+@click.argument("output", type=click.Path())
+def audit_export(env, output):
+    """Export the audit log to a JSON file."""
+    events = get_events(env)
+    with open(output, "w") as f:
+        json.dump({"env": env, "events": events}, f, indent=2)
+    click.echo(f"Exported {len(events)} event(s) to '{output}'.")
